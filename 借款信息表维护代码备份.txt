@@ -335,8 +335,26 @@ FORM frm_set_value.
   IF ztps_jkxx-lifnr IS NOT INITIAL.
     SELECT SINGLE * INTO @DATA(ls_lifnr) FROM lfa1 WHERE lifnr = @ztps_jkxx-lifnr.
     IF sy-subrc = 0.
+
 *----   自动带出供应商名称
       ztps_jkxx-zjkgsmc = ls_lifnr-name1.
     ENDIF.
+  ENDIF.
+
+*----   自动带出借款编号
+  SELECT MAX( zjkbh ) INTO @DATA(ls_jkbh) FROM ztps_jkxx WHERE lifnr = @ztps_jkxx-lifnr.
+  IF sy-subrc = 0.
+
+    IF ls_jkbh >= '00001'.
+
+      ADD 1 TO ls_jkbh.
+
+      ztps_jkxx-zjkbh = ls_jkbh.
+
+    ENDIF.
+  ELSE.
+
+    ztps_jkxx-zjkbh = '00001'.
+
   ENDIF.
 ENDFORM.
