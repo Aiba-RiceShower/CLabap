@@ -1,0 +1,342 @@
+1.屏幕编号1的标准代码（含自定义部分）
+
+PROCESS BEFORE OUTPUT.
+  MODULE liste_initialisieren.
+  LOOP AT extract WITH CONTROL
+   tctrl_ztps_jkxx CURSOR nextline.
+    MODULE liste_show_liste.
+    MODULE check_flg.  "检查标识
+  ENDLOOP.
+*
+PROCESS AFTER INPUT.
+  MODULE liste_exit_command AT EXIT-COMMAND.
+  MODULE liste_before_loop.
+  LOOP AT extract.
+    MODULE liste_init_workarea.
+    CHAIN.
+      FIELD ztps_jkxx-lifnr .
+      FIELD ztps_jkxx-zjkgsmc .
+      FIELD ztps_jkxx-zje .
+      FIELD ztps_jkxx-zbz .
+      FIELD ztps_jkxx-pspid .
+      FIELD ztps_jkxx-erdat .
+      FIELD ztps_jkxx-uzeit .
+      FIELD ztps_jkxx-uname .
+      FIELD ztps_jkxx-zyzyfk .
+      FIELD ztps_jkxx-zdel .
+      MODULE set_update_flag ON CHAIN-REQUEST.
+
+**      MODULE set_date.  "写入系统字段参数
+    ENDCHAIN.
+    FIELD vim_marked MODULE check_before_del.
+    FIELD vim_marked MODULE liste_mark_checkbox.
+    CHAIN.
+      FIELD ztps_jkxx-lifnr.
+      FIELD ztps_jkxx-zjkgsmc .
+      MODULE liste_update_liste.
+    ENDCHAIN.
+  ENDLOOP.
+  MODULE liste_after_loop.
+  
+  2.函数组包含程序定义
+  
+  SAPLZTPS_JKXX
+  
+  INCLUDE LZTPS_JKXXF01.                 "subprograms01
+  INCLUDE LZTPS_JKXXI01.                 "PAI modules01
+  INCLUDE LZTPS_JKXXO01.                 "PBO modules01
+  
+  3.包含程序实现部分
+  
+  MODULE check_flg.  "检查标识
+  
+*&---------------------------------------------------------------------*
+*& 包含               LZTPS_JKXXO01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Module CHECK_FLG OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE check_flg OUTPUT.
+
+*  SELECT SINGLE  post1 INTO g_post1 FROM proj WHERE pspid = ztps_dt-pspid .
+
+  LOOP AT SCREEN.
+
+    IF ztps_jkxx-zyzyfk EQ abap_true .
+
+      IF screen-name = 'ZTPS_JKXX-ZDEL'.
+
+        screen-input = 0.
+
+        MODIFY SCREEN .
+
+      ENDIF.
+
+    ENDIF.
+
+  ENDLOOP.
+ENDMODULE.
+
+
+MODULE check_before_del "删除前检查
+
+*----------------------------------------------------------------------*
+***INCLUDE LZTPS_JKXXI01.
+*----------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Module  CHECK_BEFORE_DEL  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE check_before_del INPUT.
+  DATA: lv_error,
+        lv_string TYPE string.
+  IF vim_marked NE space AND function = 'DELE'.
+
+    IF ztps_jkxx-zyzyfk EQ abap_true.
+
+      lv_error = 'X' .
+      lv_string = '【已转合同预付款标识】已勾选时，不允许删除' .
+
+      MESSAGE lv_string TYPE 'I' DISPLAY LIKE 'E'.
+      CLEAR vim_marked.
+      EXIT.
+
+    ENDIF.
+
+  ENDIF.
+
+
+ENDMODULE.
+
+
+4.事件
+
+
+*&---------------------------------------------------------------------*
+*& 包含               LZTPS_JKXXF01
+*&---------------------------------------------------------------------*
+
+01 FRM_SAVE_LOG
+
+*&---------------------------------------------------------------------*
+*& Form FRM_SAVE_LOG
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+FORM frm_save_log.
+
+  DATA: BEGIN OF ls_jkxx .
+      INCLUDE TYPE ztps_jkxx .
+  DATA: flag .
+  DATA: END OF ls_jkxx .
+
+  DATA: lv_flag ,
+        lv_lines  TYPE i,
+        lv_error,
+        lv_string TYPE string.
+  FIELD-SYMBOLS: <fs_yz>,<fs_del>,<fs_lifnr>,<fs_zjkgsmc>,<fs_zje>,<fs_zbz>.
+
+
+
+  LOOP AT extract.
+
+
+*----  用户进行逻辑删除时检查（勾选了删除标识，不允许保存）
+    ASSIGN COMPONENT 'ZDEL' OF STRUCTURE <vim_extract_struc> TO <fs_del>.
+    IF sy-subrc EQ 0 AND <fs_del> EQ abap_true.
+
+
+      ASSIGN COMPONENT 'ZYZYFK' OF STRUCTURE <vim_extract_struc> TO <fs_yz>.
+      IF sy-subrc EQ 0 AND <fs_yz> EQ abap_true.
+
+        lv_string = '【已转合同预付款标识】已勾选时，不允许删除' .
+
+        MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+        lv_error = 'X' .
+        EXIT.
+
+      ENDIF.
+    ENDIF.
+
+*----  检查供应商代码是否有效
+    ASSIGN COMPONENT 'LIFNR' OF STRUCTURE <vim_extract_struc> TO <fs_lifnr>.
+    IF sy-subrc EQ 0 AND <fs_lifnr> IS NOT INITIAL.
+
+
+      SELECT SINGLE * INTO @DATA(gv_lifnr) FROM lfa1 WHERE lifnr = @<fs_lifnr>.
+
+      IF sy-subrc <> 0.
+
+        lv_string = '供应商代码' && '"' && <fs_lifnr> && '"' &&',在系统中无效，请检查' .
+
+        MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+        lv_error = 'X' .
+        EXIT.
+
+      ENDIF.
+
+
+*----  检查借款公司名称是否有填写
+      ASSIGN COMPONENT 'ZJKGSMC' OF STRUCTURE <vim_extract_struc> TO <fs_zjkgsmc>.
+      IF sy-subrc NE 0.
+
+        lv_string = '借款公司名称必填，请检查填写' .
+
+        MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+        lv_error = 'X' .
+        EXIT.
+
+      ELSE.
+
+        IF <fs_zjkgsmc> IS INITIAL .
+
+          lv_string = '借款公司名称必填，请检查填写' .
+
+          MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+          lv_error = 'X' .
+          EXIT.
+        ENDIF.
+      ENDIF.
+
+*----  检查金额是否有填写
+      ASSIGN COMPONENT 'ZJE' OF STRUCTURE  <vim_extract_struc> TO <fs_zje>.
+      IF sy-subrc NE 0 .
+
+
+        MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+        lv_error = 'X' .
+        EXIT.
+      ELSE.
+
+
+        IF <fs_zje> IS INITIAL .
+
+          lv_string = '金额必填，请检查填写' .
+
+          MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+          lv_error = 'X' .
+          EXIT.
+        ENDIF.
+      ENDIF.
+
+
+*----  检查备注是否有填写
+      ASSIGN COMPONENT 'ZBZ' OF STRUCTURE  <vim_extract_struc> TO <fs_zbz>.
+      IF sy-subrc NE 0 .
+
+        lv_string = '备注必填，请检查填写' .
+
+        MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+        lv_error = 'X' .
+        EXIT.
+
+      ELSE.
+        IF <fs_zbz> IS INITIAL .
+
+          lv_string = '备注必填，请检查填写' .
+
+          MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+          lv_error = 'X' .
+          EXIT.
+        ENDIF.
+      ENDIF.
+
+
+    ENDIF.
+
+
+
+  ENDLOOP.
+
+  IF lv_error IS NOT INITIAL .
+
+    sy-subrc = 1.
+
+  ENDIF.
+
+ENDFORM.
+
+03 FRM_BEFORE_DELETE
+
+*&---------------------------------------------------------------------*
+*&      FORM  FRM_BEFORE_DELETE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM frm_before_delete.
+
+***  DATA: lv_error,
+***        lv_string TYPE string.
+***  FIELD-SYMBOLS: <fs_yz>   TYPE any,
+***                 <fs_mark> TYPE any.
+***
+****----  用户进行物理删除时检查（点击删除行）
+***
+***  LOOP AT extract.
+***
+******    CHECK vim_marked NE space.
+***    ASSIGN COMPONENT 'ZYZYFK' OF STRUCTURE <vim_extract_struc> TO <fs_yz>.
+***    IF sy-subrc EQ 0 AND <fs_yz> EQ abap_true.
+***
+***      lv_error = 'X' .
+***
+***      MODIFY extract.
+***
+***    ENDIF.
+***
+***
+***  ENDLOOP.
+***
+***  IF lv_error EQ abap_true.
+***
+***    sy-subrc = 1.
+***    lv_string = '【已转合同预付款标识】已勾选时，不允许删除' .
+***
+***    MESSAGE lv_string TYPE 'E' DISPLAY LIKE 'I'.
+****    EXIT.
+***
+***  ENDIF.
+
+ENDFORM.
+
+05 FRM_SET_DATE
+
+*&---------------------------------------------------------------------*
+*&      FORM  FRM_SET_DATE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM frm_set_date.
+
+
+  ztps_jkxx-erdat = sy-datum.
+  ztps_jkxx-uzeit = sy-uzeit.
+  ztps_jkxx-uname = sy-uname.
+
+ENDFORM.
+
+
+21 FRM_SET_VALUE
+
+*&---------------------------------------------------------------------*
+*&      FORM  FRM_SET_VALUE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM frm_set_value.
+
+*-----  供应商相关
+  IF ztps_jkxx-lifnr IS NOT INITIAL.
+    SELECT SINGLE * INTO @DATA(ls_lifnr) FROM lfa1 WHERE lifnr = @ztps_jkxx-lifnr.
+    IF sy-subrc = 0.
+*----   自动带出供应商名称
+      ztps_jkxx-zjkgsmc = ls_lifnr-name1.
+    ENDIF.
+  ENDIF.
+ENDFORM.
