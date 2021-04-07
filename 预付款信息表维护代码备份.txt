@@ -1,0 +1,442 @@
+1.屏幕编号1的标准代码（含自定义部分）
+
+PROCESS BEFORE OUTPUT.
+ MODULE LISTE_INITIALISIEREN.
+ LOOP AT EXTRACT WITH CONTROL
+  TCTRL_ZTPS_YFKXX CURSOR NEXTLINE.
+   MODULE LISTE_SHOW_LISTE.
+   MODULE CHECK_FLG.  "检查标识
+ ENDLOOP.
+*
+PROCESS AFTER INPUT.
+ MODULE LISTE_EXIT_COMMAND AT EXIT-COMMAND.
+ MODULE LISTE_BEFORE_LOOP.
+ LOOP AT EXTRACT.
+   MODULE LISTE_INIT_WORKAREA.
+   CHAIN.
+    FIELD ZTPS_YFKXX-LIFNR .
+    FIELD ZTPS_YFKXX-NAME1 .
+    FIELD ZTPS_YFKXX-ZHTLS .
+    FIELD ZTPS_YFKXX-ZJKZJE .
+    FIELD ZTPS_YFKXX-ZDZYFKJE .
+    FIELD ZTPS_YFKXX-ZFWHT .
+    FIELD ZTPS_YFKXX-ZHTMC .
+    FIELD ZTPS_YFKXX-ZHTJE .
+    FIELD ZTPS_YFKXX-ZXMH .
+    FIELD ZTPS_YFKXX-ZXMGS .
+    FIELD ZTPS_YFKXX-ZYFKJE .
+    FIELD ZTPS_YFKXX-ERDAT .
+    FIELD ZTPS_YFKXX-UZEIT .
+    FIELD ZTPS_YFKXX-UNAME .
+    FIELD ZTPS_YFKXX-ZYFKDK .
+    FIELD ZTPS_YFKXX-ZDEL .
+    MODULE SET_UPDATE_FLAG ON CHAIN-REQUEST.
+   ENDCHAIN.
+   FIELD VIM_MARKED MODULE CHECK_BEFORE_DEL.
+   FIELD VIM_MARKED MODULE LISTE_MARK_CHECKBOX.
+   CHAIN.
+    FIELD ZTPS_YFKXX-LIFNR .
+    FIELD ZTPS_YFKXX-NAME1 .
+    FIELD ZTPS_YFKXX-ZHTLS .
+    MODULE LISTE_UPDATE_LISTE.
+   ENDCHAIN.
+ ENDLOOP.
+ MODULE LISTE_AFTER_LOOP.
+
+
+ PROCESS ON VALUE-REQUEST.
+  FIELD ZTPS_YFKXX-ZHTLS MODULE F4_ZHTLS.
+  
+  2.函数组包含程序定义
+  
+  SAPLZTPS_YFKXX
+  
+  INCLUDE LZTPS_YFKXXF00                          . " subprograms
+  INCLUDE LZTPS_YFKXXF01                          . " subprograms01
+  INCLUDE LZTPS_YFKXXI00                          . " PAI modules
+  INCLUDE LZTPS_YFKXXO01                          . " PBO modules01
+  INCLUDE LSVIMFXX                                . " subprograms
+  INCLUDE LSVIMOXX                                . " PBO modules
+  INCLUDE LSVIMIXX                                . " PAI modules
+  
+  3.包含程序实现部分
+  
+  MODULE CHECK_FLG.  "检查标识
+  
+*&---------------------------------------------------------------------*
+*& 包含               LZTPS_YFKXXO01
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*& Module CHECK_FLG OUTPUT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+MODULE check_flg OUTPUT.
+
+*  SELECT SINGLE  post1 INTO g_post1 FROM proj WHERE pspid = ztps_dt-pspid .
+
+  LOOP AT SCREEN.
+
+    IF ztps_yfkxx-zyfkdk EQ abap_true .
+
+      IF screen-name = 'ZTPS_YFKXX-ZDEL'.
+
+        screen-input = 0.
+
+        MODIFY SCREEN .
+
+      ENDIF.
+
+    ENDIF.
+
+
+    IF ztps_yfkxx-lifnr IS NOT INITIAL AND ztps_yfkxx-zhtls IS NOT INITIAL AND ztps_yfkxx-zyfkje IS NOT INITIAL.
+
+
+***      SELECT SINGLE * FROM ztps_yfkxx WHERE lifnr = @ztps_yfkxx-lifnr AND zhtls = @ztps_yfkxx-zhtls INTO @DATA(ls_yfkxx).
+***
+***      CHECK ls_yfkxx IS NOT INITIAL.
+
+      IF screen-name = 'ZTPS_YFKXX-LIFNR'
+        OR screen-name = 'ZTPS_YFKXX-NAME1'
+        OR screen-name = 'ZTPS_YFKXX-ZHTLS'
+        OR screen-name = 'ZTPS_YFKXX-ZJKZJE'
+        OR screen-name = 'ZTPS_YFKXX-ZDZYFKJE'
+        OR screen-name = 'ZTPS_YFKXX-ZFWHT'
+        OR screen-name = 'ZTPS_YFKXX-ZHTMC'
+        OR screen-name = 'ZTPS_YFKXX-ZHTJE'
+        OR screen-name = 'ZTPS_YFKXX-ZXMH'
+        OR screen-name = 'ZTPS_YFKXX-ZXMGS'
+        OR screen-name = 'ZTPS_YFKXX-ZYFKJE'
+        OR screen-name = 'ZTPS_YFKXX-ERDAT'
+        OR screen-name = 'ZTPS_YFKXX-UZEIT'
+        OR screen-name = 'ZTPS_YFKXX-UNAME'
+        OR screen-name = 'ZTPS_YFKXX-ZYFKDK'
+        OR screen-name = 'ZTPS_YFKXX-ZDEL'.
+
+        screen-input = 0.
+
+        MODIFY SCREEN .
+
+      ENDIF.
+
+    ENDIF.
+
+
+  ENDLOOP.
+ENDMODULE.
+
+
+FIELD VIM_MARKED MODULE CHECK_BEFORE_DEL. "删除前检查
+
+*----------------------------------------------------------------------*
+***INCLUDE LZTPS_YFKXXI00.
+*----------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Module  CHECK_BEFORE_DEL  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE check_before_del INPUT.
+  DATA: lv_error,
+        lv_string TYPE string.
+  IF vim_marked NE space AND function = 'DELE'.
+
+    IF ztps_yfkxx-zyfkdk EQ abap_true.
+
+      lv_error = 'X' .
+      lv_string = '【是否已产生预付款抵扣】已勾选时，不允许删除' .
+
+      MESSAGE lv_string TYPE 'I' DISPLAY LIKE 'E'.
+      CLEAR vim_marked.
+      EXIT.
+
+    ENDIF.
+  ENDIF.
+
+ENDMODULE.
+
+
+4.事件
+
+
+*&---------------------------------------------------------------------*
+*& 包含               LZTPS_YFKXXF01
+*&---------------------------------------------------------------------*
+
+01 FRM_SAVE_LOG
+
+
+*&---------------------------------------------------------------------*
+*& Form FRM_SAVE_LOG
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+FORM frm_save_log.
+
+  DATA: BEGIN OF ls_yfkxx .
+      INCLUDE TYPE ztps_yfkxx .
+  DATA: flag .
+  DATA: END OF ls_yfkxx .
+
+  DATA: lv_flag ,
+        lv_lines  TYPE i,
+        lv_error,
+        lv_string TYPE string.
+  FIELD-SYMBOLS: <fs_dk>,<fs_del>,<fs_lifnr>,<fs_zhtls>,<fs_name1>,<fs_yfkje>.
+
+
+  LOOP AT extract.
+
+    ASSIGN COMPONENT 'LIFNR' OF STRUCTURE <vim_extract_struc> TO <fs_lifnr>.
+    IF sy-subrc EQ 0.
+
+      IF <fs_lifnr> IS ASSIGNED AND <fs_lifnr> IS NOT INITIAL.
+
+        SELECT SINGLE * INTO @DATA(gv_lifnr) FROM ztps_jkxx WHERE lifnr = @<fs_lifnr> AND zdel <> @abap_true.
+
+        IF sy-subrc <> 0.
+
+*            DATA(icon_a)  = icon_red_light.
+          lv_string = '供应商代码' && '" ' && <fs_lifnr> && ' "' &&',尚未进行【借款信息录入】，请检查' .
+*            PERFORM append_message USING 'E' lv_title lv_index lv_string CHANGING gt_message icon_a.
+          MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+          lv_error = 'X' .
+          EXIT.
+
+        ELSE.
+
+          ASSIGN COMPONENT 'ZHTLS' OF STRUCTURE <vim_extract_struc> TO <fs_zhtls>.
+          IF sy-subrc = 0.
+            IF <fs_zhtls> IS ASSIGNED AND <fs_zhtls> IS NOT INITIAL.
+
+              SELECT SINGLE * INTO @DATA(ls_xdf) FROM ztmm_xdfxx WHERE lifnr = @<fs_lifnr> AND zhtls = @<fs_zhtls>.
+
+              IF sy-subrc <> 0.
+
+                ASSIGN COMPONENT 'NAME1' OF STRUCTURE <vim_extract_struc> TO <fs_name1>.
+                IF sy-subrc = 0 AND <fs_name1> IS NOT INITIAL.
+
+*                    icon_a  = icon_red_light.
+
+                  lv_string =  '" ' && <fs_zhtls> && ' "' &&' 非供应商' && '【 ' && <fs_name1> && '】 ' && '下合同，请检查' .
+*                    PERFORM append_message USING 'E' lv_title lv_index lv_string CHANGING gt_message icon_a.
+                  MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+                  lv_error = 'X' .
+                  EXIT.
+
+
+                ELSE.
+
+*                    icon_a  = icon_red_light.
+
+                  lv_string = '" ' && <fs_zhtls> && ' "' &&' 非供应商代码' && '【 ' && <fs_lifnr> && '】 ' && '下合同，请检查' .
+*                    PERFORM append_message USING 'E' lv_title lv_index lv_string CHANGING gt_message icon_a.
+                  MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+                  lv_error = 'X' .
+                  EXIT.
+
+
+                ENDIF.
+
+
+              ELSE.
+
+
+                SELECT SINGLE jb~zhtls
+                     INTO @DATA(ls_zhtls)
+                     FROM ztmm_jbxx AS jb
+                     LEFT JOIN ztmm_htbd AS bd ON jb~zhtls = bd~zhtls
+                     WHERE jb~zhtls = @<fs_zhtls>
+                     AND jb~statu IN (4,5,6,7)
+                     AND jb~spsta = 3
+                     AND bd~ekorg EQ '2601'.
+
+                IF sy-subrc <> 0.
+*                    icon_a  = icon_red_light.
+                  lv_string =  '" ' && <fs_zhtls> && ' "' &&',非属采购组织：2601 的有效合同' .
+*                    PERFORM append_message USING 'E' lv_title lv_index lv_string CHANGING gt_message icon_a.
+                  MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+
+                  lv_error = 'X' .
+                  EXIT.
+
+                ENDIF.
+
+              ENDIF.
+
+              ASSIGN COMPONENT 'NAME1' OF STRUCTURE <vim_extract_struc> TO <fs_name1>.
+              ASSIGN COMPONENT 'ZYFKJE' OF STRUCTURE <vim_extract_struc> TO <fs_yfkje>.
+              IF <fs_yfkje> EQ '0.00' AND <fs_name1> IS NOT INITIAL.
+*                     icon_a  = icon_red_light.
+                lv_string = '供应商' && '【 ' && <fs_name1> && ' 】' && '——合同' && '"' && <fs_zhtls> && '"' && '：未填写 预付款金额 ，请检查' .
+*                     PERFORM append_message USING 'E' lv_title lv_index lv_string CHANGING gt_message icon_a.
+                MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+
+                lv_error = 'X' .
+                EXIT.
+
+              ENDIF.
+
+            ELSEIF <fs_zhtls> IS INITIAL. """合同必输控制
+
+              lv_string = '供应商' && '【 ' && <fs_name1> && ' 】' &&  '：未填写 合同流水号 ，请检查' .
+
+              MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+
+              lv_error = 'X' .
+
+              EXIT.
+
+            ENDIF.
+
+          ENDIF.
+
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+
+
+
+
+*****        删除的需要检查【是否已产生预付款抵扣】是否勾选
+
+    ASSIGN COMPONENT 'ZDEL' OF STRUCTURE <vim_extract_struc> TO <fs_del>.
+    IF sy-subrc EQ 0 AND <fs_del> EQ abap_true.
+
+*----  用户进行逻辑删除时检查（勾选了删除标识，不允许保存）
+
+      ASSIGN COMPONENT 'ZYFKDK' OF STRUCTURE <vim_extract_struc> TO <fs_dk>.
+      IF sy-subrc EQ 0.
+
+        IF <fs_dk> IS ASSIGNED AND <fs_dk> EQ abap_true.
+*        icon_a  = icon_red_light.
+          lv_string = '【是否已产生预付款抵扣】已勾选时，不允许删除' .
+*        PERFORM append_message USING 'E' lv_title lv_index lv_string CHANGING gt_message icon_a.
+          MESSAGE lv_string TYPE 'S' DISPLAY LIKE 'E'.
+          lv_error = 'X' .
+          EXIT.
+        ENDIF.
+
+
+      ENDIF.
+
+    ENDIF.
+  ENDLOOP.
+
+
+  IF lv_error IS NOT INITIAL .
+
+    sy-subrc = 1.
+
+  ENDIF.
+
+*  IF gt_message[] IS NOT INITIAL.
+*    PERFORM pop_up_message.
+**    gv_error = abap_true.
+*  ENDIF.
+
+ENDFORM.
+
+05 FRM_GET_DATA
+
+*&---------------------------------------------------------------------*
+*& Form FRM_GET_DATA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+FORM frm_get_data.
+
+*----   计算待转合同预付款金额（借款金额-已转合同预付款金额）
+
+  """"已转合同预付款金额
+  DATA: lv_yzyfkje TYPE zeyfkje.
+  SELECT SINGLE SUM( zyfkje ) AS zyfkje INTO lv_yzyfkje FROM ztps_yfkxx WHERE lifnr = ztps_yfkxx-lifnr AND zdel <> abap_true GROUP BY lifnr.
+  IF lv_yzyfkje <> '0.00'.
+
+    """"待转合同预付款金额
+    ztps_yfkxx-zdzyfkje = ztps_yfkxx-zjkzje - lv_yzyfkje.
+
+  ENDIF.
+
+*----  自动带出系统日期时间人员
+  ztps_yfkxx-erdat = sy-datum.
+  ztps_yfkxx-uzeit = sy-uzeit.
+  ztps_yfkxx-uname = sy-uname.
+
+ENDFORM.
+
+
+21 FRM_SET_VALUE
+
+*&---------------------------------------------------------------------*
+*& Form FRM_SET_VALUE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+FORM frm_set_value.
+
+
+*-----  供应商相关
+  IF ztps_yfkxx-lifnr IS NOT INITIAL.
+    SELECT SINGLE * INTO @DATA(ls_lifnr) FROM lfa1 WHERE lifnr = @ztps_yfkxx-lifnr.
+    IF sy-subrc = 0.
+*----   自动带出供应商名称
+      ztps_yfkxx-name1 = ls_lifnr-name1.
+    ENDIF.
+
+*----   自动带出借款总金额
+    SELECT SUM( zje ) INTO @DATA(ls_je) FROM ztps_jkxx WHERE lifnr = @ztps_yfkxx-lifnr AND zdel <> @abap_true.
+    IF sy-subrc = 0.
+      ztps_yfkxx-zjkzje = ls_je.
+    ENDIF.
+***    SELECT SINGLE * INTO @DATA(ls_jkxx) FROM ztps_jkxx WHERE lifnr = @ztps_yfkxx-lifnr AND zdel <> @abap_true.
+***    IF sy-subrc = 0.
+***      ztps_yfkxx-zjkzje = ls_jkxx-zje.
+***    ENDIF.
+
+  ENDIF.
+
+*-----  合同流水号相关
+*----    根据供应商到的合同流水，去取（法务合同号、合同名称、合同总金额、项目号、项目公司）
+  IF ztps_yfkxx-zhtls IS NOT INITIAL.
+    SELECT SINGLE * INTO @DATA(ls_jbxx) FROM ztmm_jbxx WHERE zhtls = @ztps_yfkxx-zhtls AND statu IN (4,5,6,7) AND spsta = 3.
+    IF sy-subrc = 0.
+      ztps_yfkxx-zfwht = ls_jbxx-zfwht.
+      ztps_yfkxx-zhtmc = ls_jbxx-zhtmc.
+      ztps_yfkxx-zhtje = ls_jbxx-zhtje.
+
+      SELECT SINGLE * INTO @DATA(ls_fwxx) FROM ztmm_fwxx WHERE zhtls = @ls_jbxx-zhtls.
+      IF sy-subrc = 0.
+        ztps_yfkxx-zxmh = ls_fwxx-posid.
+
+        IF ztps_yfkxx-zxmh IS NOT INITIAL.
+          SELECT SINGLE * INTO @DATA(ls_prps) FROM prps WHERE posid = @ztps_yfkxx-zxmh.
+          IF sy-subrc = 0.
+
+            ztps_yfkxx-zxmgs = ls_prps-pbukr.
+          ENDIF.
+        ENDIF.
+
+      ENDIF.
+
+    ENDIF.
+  ENDIF.
+
+
+*----  自动带出系统日期时间人员
+  ztps_yfkxx-erdat = sy-datum.
+  ztps_yfkxx-uzeit = sy-uzeit.
+  ztps_yfkxx-uname = sy-uname.
+
+ENDFORM.
